@@ -1,5 +1,5 @@
-
 const express = require("express");
+const https = require("https");
 
 const app = express();
 
@@ -13,14 +13,9 @@ app.post("/send", async (req, res) => {
 
   try {
 
-    const {
-      webhook,
-      payload,
-      method
-    } = req.body;
+    const { webhook, payload, method } = req.body;
 
     if (!webhook || !payload) {
-
       return res.status(400).json({
         error: "Missing webhook or payload"
       });
@@ -30,39 +25,63 @@ app.post("/send", async (req, res) => {
     console.log("METHOD:", method);
     console.log("WEBHOOK:", webhook);
 
-    const response = await fetch(webhook, {
-      method: method || "POST",
+    // ===============================
+    // 🔥 ПРАВИЛЬНАЯ ОБРАБОТКА URL
+    // ===============================
+    const urlObj = new URL(webhook);
+
+    // добавляем wait=true только для POST (создание сообщения)
+    if (!method || method.toLowerCase() === "post") {
+      urlObj.searchParams.set("wait", "true");
+    }
+
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: (method || "POST").toUpperCase(),
       headers: {
         "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+      }
+    };
+
+    const discordReq = https.request(options, (discordRes) => {
+
+      let data = "";
+
+      discordRes.on("data", chunk => {
+        data += chunk;
+      });
+
+      discordRes.on("end", () => {
+
+        console.log("==== DISCORD RESPONSE ====");
+        console.log("STATUS:", discordRes.statusCode);
+        console.log("BODY:", data);
+
+        res.status(discordRes.statusCode || 200);
+
+        try {
+          const json = JSON.parse(data);
+          res.json(json);
+        } catch {
+          res.send(data);
+        }
+      });
     });
 
-    const text = await response.text();
+    discordReq.on("error", (err) => {
+      console.error("REQUEST ERROR:", err);
+      res.status(500).json({ error: err.toString() });
+    });
 
-    console.log("==== DISCORD RESPONSE ====");
-    console.log("STATUS:", response.status);
-    console.log("BODY:", text);
-
-    // Возвращаем оригинальный ответ Discord
-    res.status(response.status);
-
-    try {
-
-      const json = JSON.parse(text);
-
-      return res.json(json);
-
-    } catch {
-
-      return res.send(text);
-    }
+    discordReq.write(JSON.stringify(payload));
+    discordReq.end();
 
   } catch (err) {
 
     console.error("PROXY ERROR:", err);
 
-    return res.status(500).json({
+    res.status(500).json({
       error: err.toString()
     });
   }
@@ -73,4 +92,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Proxy started on port ${PORT}`);
 });
-
