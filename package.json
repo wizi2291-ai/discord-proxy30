@@ -1,15 +1,8 @@
-
 {
   "name": "discord-proxy",
   "version": "1.0.0",
-  "description": "Discord webhook proxy for Google Apps Script",
   "main": "index.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
   }
 }
-
